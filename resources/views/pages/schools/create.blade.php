@@ -74,26 +74,24 @@
                         </div>
 
                         <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            <div class="space-y-1">
-                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Siswa</label>
-                                <input type="number" name="student_count" required value="0"
-                                       class="w-full border-slate-200 rounded-xl py-3 focus:border-indigo-500 transition-all">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Guru</label>
-                                <input type="number" name="teacher_count" required value="0"
-                                       class="w-full border-slate-200 rounded-xl py-3 focus:border-indigo-500 transition-all">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ruang Kelas</label>
-                                <input type="number" name="class_count" value="0"
-                                       class="w-full border-slate-200 rounded-xl py-3 focus:border-indigo-500 transition-all">
-                            </div>
-                            <div class="space-y-1">
-                                <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tahun Berdiri</label>
-                                <input type="number" name="established_year" placeholder="YYYY"
-                                       class="w-full border-slate-200 rounded-xl py-3 focus:border-indigo-500 transition-all">
-                            </div>
+                            @foreach([
+                                'student_count' => 'Total Siswa',
+                                'teacher_count' => 'Total Guru',
+                                'class_count' => 'Ruang Kelas',
+                                'established_year' => 'Tahun Berdiri'
+                            ] as $name => $label)
+                                <div class="space-y-1">
+                                    <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">{{ $label }}</label>
+                                    <input type="number"
+                                           name="{{ $name }}"
+                                           step="1"
+                                           @if($name == 'established_year') placeholder="YYYY" @else value="0" @endif
+                                           required
+                                           class="w-full border-slate-200 rounded-xl py-3 focus:border-indigo-500 transition-all"
+                                           @keydown.up.prevent="$el.value = parseInt($el.value || 0) + 1"
+                                           @keydown.down.prevent="$el.value = Math.max(0, parseInt($el.value || 0) - 1)">
+                                </div>
+                            @endforeach
                         </div>
 
                         <div class="mt-10 p-6 bg-slate-50/50 rounded-3xl border border-slate-100">
@@ -153,7 +151,7 @@
                             </div>
                         </div>
 
-                        <div id="map" class="h-64 rounded-[2rem] mb-4 border border-slate-100 z-0"></div>
+                        <div id="map" class="h-64 rounded-[2rem] mb-4 border border-slate-100 z-0 bg-slate-50"></div>
 
                         <div class="grid grid-cols-1 gap-3 px-2 mb-2">
                             <div class="bg-slate-50 p-3 rounded-2xl border border-slate-100">
@@ -185,7 +183,9 @@
         <style>
             .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+            /* Menghilangkan spinner default browser agar tampilan bersih */
             input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+            input[type=number] { -moz-appearance: textfield; }
         </style>
     @endpush
 
@@ -201,21 +201,29 @@
                     marker: null,
 
                     initForm() {
-                        setTimeout(() => {
-                            this.formLoaded = true;
+                        // Langsung panggil render map tanpa delay lama
+                        this.formLoaded = true;
+                        this.$nextTick(() => {
                             this.initMap();
-                        }, 100);
+                        });
                     },
 
                     initMap() {
+                        // Optimasi loading peta: matikan animasi zoom awal jika dirasa lambat
                         this.map = L.map('map', {
                             zoomControl: true,
-                            scrollWheelZoom: false
+                            scrollWheelZoom: false,
+                            fadeAnimation: true
                         }).setView([-7.68, 110.83], 12);
 
-                        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-                            attribution: '&copy; OpenStreetMap'
+                        // Menggunakan CartoDB Voyager yang ringan dan cepat
+                        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+                            attribution: '&copy; OpenStreetMap',
+                            subdomains: 'abcd'
                         }).addTo(this.map);
+
+                        // Memaksa kalkulasi ulang ukuran kontainer agar tidak lambat/nge-bug
+                        setTimeout(() => { this.map.invalidateSize(); }, 100);
 
                         this.map.on('click', (e) => {
                             this.updateMarker(e.latlng.lat, e.latlng.lng);
