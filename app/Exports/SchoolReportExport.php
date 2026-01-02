@@ -39,7 +39,6 @@ class SchoolReportExport implements FromQuery, WithHeadings, WithMapping, Should
             'Kecamatan',
             'Catatan (Notes)',
             'Jumlah Siswa',
-            'Koordinat'
         ];
     }
 
@@ -54,7 +53,6 @@ class SchoolReportExport implements FromQuery, WithHeadings, WithMapping, Should
             $school->district->name ?? '-',
             $this->report->notes ?? '-',
             $school->student_count . ' Siswa',
-            $school->latitude . ',' . $school->longitude
         ];
     }
 }

@@ -17,7 +17,7 @@
         </div>
     </x-slot>
 
-    <div class="flex flex-col h-[calc(100vh-160px)] gap-6 p-4 md:p-0" x-data="{ statsOpen: true }">
+    <div class="flex flex-col h-[calc(100vh-160px)] gap-6 p-4 md:p-0" x-data="{ statsOpen: true, selectedDistrict: null }">
 
         <div>
             <x-breadcrumb :items="[['label' => 'Peta GIS']]"/>
@@ -43,6 +43,12 @@
                             </span>
                             <span class="text-[9px] font-black text-teal-700 uppercase tracking-widest">Live Sync</span>
                         </div>
+                        <button x-show="selectedDistrict !== null"
+                                @click="selectedDistrict = null; window.filterDistrict(null)"
+                                class="flex items-center gap-1.5 bg-red-50 px-3 py-1 rounded-full border border-red-100 hover:bg-red-100 transition-colors">
+                            <svg class="w-3 h-3 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            <span class="text-[9px] font-black text-red-700 uppercase tracking-widest">Reset Filter</span>
+                        </button>
                     </div>
                     <button @click="statsOpen = false" class="p-2 text-slate-400 hover:text-slate-600 transition-colors">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -69,9 +75,13 @@
                         </div>
                     </div>
 
-                    <div class="md:col-span-3 flex gap-4 overflow-x-auto pb-2 custom-scrollbar no-scrollbar-md">
+                    <div class="md:col-span-3 flex gap-4 overflow-x-auto px-2 py-5 custom-scrollbar no-scrollbar-md">
                         @foreach($districts as $district)
-                            <div class="min-w-[280px] flex-1 p-5 bg-slate-50/50 border border-slate-100 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300">
+                            <div @click="selectedDistrict = selectedDistrict === {{ $district->id }} ? null : {{ $district->id }}; window.filterDistrict(selectedDistrict === {{ $district->id }} ? {{ $district->id }} : null)"
+                                 :class="selectedDistrict === {{ $district->id }} ? 'ring-2 ring-offset-1' : ''"
+                                 class="min-w-[280px] flex-1 p-5 bg-slate-50/50 border border-slate-100 rounded-3xl hover:bg-white hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300 cursor-pointer"
+                                 style="--ring-color: {{ $district->color_hex }}20"
+                                 :style="selectedDistrict === {{ $district->id }} ? 'ring-color: {{ $district->color_hex }}' : ''">
                                 <div class="flex justify-between items-start mb-4">
                                     <div class="flex items-center gap-3">
                                         <div class="w-10 h-10 rounded-2xl flex items-center justify-center shadow-sm" style="background-color: {{ $district->color_hex }}15">
@@ -79,7 +89,10 @@
                                         </div>
                                         <div>
                                             <h4 class="font-bold text-slate-800 text-sm leading-tight">{{ $district->name }}</h4>
-                                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Kecamatan Aktif</p>
+                                            <p class="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                                                <span x-show="selectedDistrict !== {{ $district->id }}">Klik untuk Filter</span>
+                                                <span x-show="selectedDistrict === {{ $district->id }}" class="text-teal-600">Aktif</span>
+                                            </p>
                                         </div>
                                     </div>
                                     <div class="text-right">
@@ -128,26 +141,17 @@
         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
         <style>
             [x-cloak] { display: none !important; }
-            .no-scrollbar::-webkit-scrollbar { display: none; }
-
-            /* Leaflet Overrides */
-            .leaflet-container { font-family: 'Plus Jakarta Sans', sans-serif !important; background: #f8fafc !important; }
-            .leaflet-control-zoom { border: none !important; margin-right: 24px !important; margin-bottom: 24px !important; }
-            .leaflet-control-zoom-in, .leaflet-control-zoom-out {
-                background: white !important; color: #1e293b !important; border: 1px solid #e2e8f0 !important;
-                width: 48px !important; height: 48px !important; line-height: 48px !important;
-                font-weight: 800 !important; border-radius: 16px !important; margin-bottom: 8px !important;
-                box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1) !important;
-            }
-            .animate-bounce-slow { animation: bounce 3s infinite; }
             @keyframes bounce { 0%, 100% { transform: translateY(-5%); } 50% { transform: translateY(0); } }
         </style>
-    @endpush
+    @endpush>
 
     @push('scripts')
         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
         <script>
             document.addEventListener('DOMContentLoaded', function () {
+                window.districtLayers = {};
+                window.schoolMarkers = {};
+
                 window.mapInstance = L.map('map', {
                     zoomControl: false,
                     attributionControl: false
@@ -155,12 +159,10 @@
 
                 L.control.zoom({ position: 'bottomright' }).addTo(window.mapInstance);
 
-                // Modern Map Style (Voyager)
                 L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                     maxZoom: 19
                 }).addTo(window.mapInstance);
 
-                // Office Icon
                 const officeIcon = L.divIcon({
                     html: `<div class="relative">
                                <div class="absolute -inset-4 bg-teal-500/20 rounded-full animate-pulse"></div>
@@ -173,9 +175,8 @@
 
                 L.marker([{{ $office->geom->latitude }}, {{ $office->geom->longitude }}], { icon: officeIcon }).addTo(window.mapInstance);
 
-                // District Polygons
                 @foreach($districts as $district)
-                L.geoJSON({!! $district->geom->toJson() !!}, {
+                    window.districtLayers[{{ $district->id }}] = L.geoJSON({!! $district->geom->toJson() !!}, {
                     style: {
                         color: '{{ $district->color_hex }}',
                         weight: 4,
@@ -186,17 +187,51 @@
                 }).addTo(window.mapInstance).bindPopup(`<h4 class="font-black text-slate-800 uppercase tracking-tighter">Kec. ${'{{ $district->name }}'}</h4>`);
                 @endforeach
 
-                // School Markers
                 @foreach($schools as $school)
-                L.circleMarker([{{ $school->geom->latitude }}, {{ $school->geom->longitude }}], {
+                if (!window.schoolMarkers[{{ $school->district_id }}]) {
+                    window.schoolMarkers[{{ $school->district_id }}] = [];
+                }
+                const marker{{ $school->id }} = L.circleMarker([{{ $school->geom->latitude }}, {{ $school->geom->longitude }}], {
                     radius: 8, fillColor: "#0d9488", color: "#fff", weight: 3, fillOpacity: 1
                 }).addTo(window.mapInstance).bindPopup(`<div class="p-1 font-bold text-slate-800">${'{{ $school->name }}'}</div>`);
+                window.schoolMarkers[{{ $school->district_id }}].push(marker{{ $school->id }});
                 @endforeach
 
-                // Force Invalidate on Resize/Toggle
+                window.filterDistrict = function(districtId) {
+                    if (districtId === null) {
+                        Object.values(window.districtLayers).forEach(layer => {
+                            layer.setStyle({ fillOpacity: 0.1, weight: 4 });
+                        });
+                        Object.values(window.schoolMarkers).forEach(markers => {
+                            markers.forEach(marker => marker.setStyle({ fillOpacity: 1, radius: 8 }));
+                        });
+                        window.mapInstance.setView([{{ $office->geom->latitude }}, {{ $office->geom->longitude }}], 13);
+                    } else {
+                        Object.keys(window.districtLayers).forEach(id => {
+                            const layer = window.districtLayers[id];
+                            if (parseInt(id) === districtId) {
+                                layer.setStyle({ fillOpacity: 0.25, weight: 6 });
+                                window.mapInstance.fitBounds(layer.getBounds(), { padding: [50, 50] });
+                            } else {
+                                layer.setStyle({ fillOpacity: 0.05, weight: 2 });
+                            }
+                        });
+
+                        Object.keys(window.schoolMarkers).forEach(id => {
+                            const markers = window.schoolMarkers[id];
+                            markers.forEach(marker => {
+                                if (parseInt(id) === districtId) {
+                                    marker.setStyle({ fillOpacity: 1, radius: 10 });
+                                } else {
+                                    marker.setStyle({ fillOpacity: 0.2, radius: 5 });
+                                }
+                            });
+                        });
+                    }
+                };
+
                 window.addEventListener('resize', () => window.mapInstance.invalidateSize());
 
-                // Alpine Watcher for Sidebar/Stats Toggle
                 document.addEventListener('alpine:init', () => {
                     Alpine.effect(() => {
                         setTimeout(() => window.mapInstance.invalidateSize(), 600);
@@ -204,5 +239,5 @@
                 });
             });
         </script>
-    @endpush
+    @endpush>
 </x-app-layout>

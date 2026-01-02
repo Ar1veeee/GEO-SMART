@@ -183,7 +183,6 @@
         <style>
             .animate-fade-in { animation: fadeIn 0.5s ease-out forwards; }
             @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-            /* Menghilangkan spinner default browser agar tampilan bersih */
             input::-webkit-outer-spin-button, input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
             input[type=number] { -moz-appearance: textfield; }
         </style>
@@ -209,20 +208,17 @@
                     },
 
                     initMap() {
-                        // Optimasi loading peta: matikan animasi zoom awal jika dirasa lambat
                         this.map = L.map('map', {
                             zoomControl: true,
                             scrollWheelZoom: false,
                             fadeAnimation: true
                         }).setView([-7.68, 110.83], 12);
 
-                        // Menggunakan CartoDB Voyager yang ringan dan cepat
                         L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
                             attribution: '&copy; OpenStreetMap',
                             subdomains: 'abcd'
                         }).addTo(this.map);
 
-                        // Memaksa kalkulasi ulang ukuran kontainer agar tidak lambat/nge-bug
                         setTimeout(() => { this.map.invalidateSize(); }, 100);
 
                         this.map.on('click', (e) => {
@@ -261,4 +257,4 @@
             }
         </script>
     @endpush
-</x-app-layout>
+</x-app-layout>e

@@ -18,9 +18,12 @@ class MapController extends Controller
         $districts = District::all()->map(function ($district) {
             $district->school_count = School::where('district_id', $district->id)->count();
 
+            $district->total_students = School::where('district_id', $district->id)->sum('student_count');
+
             $district->avg_students = $district->school_count > 0
                 ? round(School::where('district_id', $district->id)->avg('student_count'))
                 : 0;
+
             if ($district->total_students > 7000) {
                 $district->color_hex = '#ef4444';
                 $district->bg_soft = 'bg-red-50';
@@ -36,7 +39,7 @@ class MapController extends Controller
         });
 
         $types = School::distinct()->orderBy('type')->pluck('type');
-        $districtOptions = District::orderBy('name')->pluck('name', 'id');
+        $districtOptions = District::orderBy('name')->get();
 
         return view('pages.map.index', compact(
             'office', 'schools', 'districts', 'types', 'districtOptions'
